@@ -82,14 +82,18 @@ async def start(message: types.Message, state: FSMContext):
     await message.answer("https://t.me/cleodis")
     await state.clear()
 
-@dp.message(F.text.contains("Скрипты"))
-async def list_categories(message: types.Message):
-    data = load_data()
-    if not data['categories']:
-        await message.answer("Категории пока не добавлены.")
-    else:
-        await message.answer("Выберите категорию:", reply_markup=categories_keyboard(data))
-
+@dp.message()
+async def debug_and_scripts(message: types.Message):
+    # Всегда показываем что реально пришло
+    await message.answer(f"DEBUG: [{message.text}]")
+    # Если текст содержит "Скрипт" (с эмодзи или без, сработает на все варианты)
+    if message.text and "Скрипт" in message.text:
+        data = load_data()
+        if not data['categories']:
+            await message.answer("Категории пока не добавлены.")
+        else:
+            await message.answer("Выберите категорию:", reply_markup=categories_keyboard(data))
+            
 @dp.message(F.text == "💬 Связь с разработчиком")
 async def contact_dev(message: types.Message):
     await message.answer(
