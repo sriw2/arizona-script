@@ -20,7 +20,7 @@ class AddCategory(StatesGroup):
     waiting_for_category_name = State()
     waiting_for_script_category = State()
     waiting_for_script_name = State()
-    waiting_for_script_content = State()
+    waiting_for_script_file = State()
     waiting_for_script_description = State()
 
 storage = MemoryStorage()
@@ -64,7 +64,7 @@ def categories_keyboard(data):
 def scripts_keyboard(category, data):
     builder = InlineKeyboardBuilder()
     for script in data['categories'][category]['scripts']:
-        builder.button(text=f"📝 {script}", callback_data=f"script:{category}:{script}")
+        builder.button(text=f"📝 [{script}]", callback_data=f"script:{category}:{script}")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -74,14 +74,12 @@ async def start(message: types.Message, state: FSMContext):
     text = (
         "👋 <b>Привет, {0}!</b>\n"
         "Добро пожаловать в <b>ScriptHub</b> — ваш помощник для быстрого поиска лучших скриптов по категориям!\n\n"
-        "📜 <b>Что умеет бот?</b>\n"
-        "— Удобно выбирать и просматривать скрипты по категориям\n"
-        "— Оставлять обратную связь\n"
-        "— Всегда быть на связи с разработчиком\n\n"
-        "Ссылка на чат: <a href='https://t.me/cleodis'>https://t.me/cleodis</a>\n\n"
-        "Выберите действие из меню ниже 👇"
+        "📜 <b>Выберите кнопку ниже для продолжения</b>\n"
+        "⬇️\n"
+        "<i>Чат поддержки находится ниже</i>"
     ).format(message.from_user.first_name)
     await message.answer(text, reply_markup=main_menu_keyboard(is_admin))
+    await message.answer("https://t.me/cleodis")
     await state.clear()
 
 @dp.message(F.text == "📜 Скрипты")
@@ -151,7 +149,7 @@ async def add_script_receive_category(message: types.Message, state: FSMContext)
         await state.clear()
         return
     await state.update_data(category=category)
-    await message.answer("Введите название скрипта:")
+    await message.answer("Введите название скрипта (оно будет отображаться в квадратных скобках):")
     await state.set_state(AddCategory.waiting_for_script_name)
 
 @dp.message(AddCategory.waiting_for_script_name)
@@ -165,17 +163,20 @@ async def add_script_receive_name(message: types.Message, state: FSMContext):
         await state.clear()
         return
     await state.update_data(script_name=script_name)
-    await message.answer("Отправьте сам скрипт (текст):")
-    await state.set_state(AddCategory.waiting_for_script_content)
+    await message.answer("Отправьте файл скрипта (документом, не как сообщение):")
+    await state.set_state(AddCategory.waiting_for_script_file)
 
-@dp.message(AddCategory.waiting_for_script_content)
-async def add_script_receive_content(message: types.Message, state: FSMContext):
-    script_content = message.text.strip()
+@dp.message(AddCategory.waiting_for_script_file)
+async def add_script_receive_file(message: types.Message, state: FSMContext):
+    # Проверяем, что файл есть
+    if not message.document:
+        await message.answer("Пожалуйста, отправьте файл скрипта документом.")
+        return
+    file_id = message.document.file_id
+    file_name = message.document.file_name
     user_data = await state.get_data()
-    category = user_data['category']
-    script_name = user_data['script_name']
-    await state.update_data(script_content=script_content)
-    await message.answer("Теперь отправьте описание для скрипта (можно прислать цитатой):")
+    await state.update_data(script_file_id=file_id, script_file_name=file_name)
+    await message.answer("Теперь отправьте описание для скрипта (можно отправить как цитату на своё сообщение с файлом):")
     await state.set_state(AddCategory.waiting_for_script_description)
 
 @dp.message(AddCategory.waiting_for_script_description)
@@ -184,14 +185,16 @@ async def add_script_receive_description(message: types.Message, state: FSMConte
     user_data = await state.get_data()
     category = user_data['category']
     script_name = user_data['script_name']
-    script_content = user_data['script_content']
+    script_file_id = user_data['script_file_id']
+    script_file_name = user_data['script_file_name']
     data = load_data()
     data['categories'][category]['scripts'][script_name] = {
-        "content": script_content,
+        "file_id": script_file_id,
+        "file_name": script_file_name,
         "description": script_description
     }
     save_data(data)
-    await message.answer("Скрипт добавлен!", reply_markup=admin_panel_keyboard())
+    await message.answer("Скрипт успешно добавлен!", reply_markup=admin_panel_keyboard())
     await state.clear()
 
 @dp.message(F.text == "⬅️ В меню")
@@ -221,13 +224,15 @@ async def show_script(callback: types.CallbackQuery):
     data = load_data()
     script = data['categories'][category]['scripts'][script_name]
     desc = script['description']
-    script_content = script['content']
+    file_id = script['file_id']
+    file_name = script['file_name']
     text = (
-        f"<b>📝 {script_name}</b>\n"
+        f"<b>📝 [{script_name}]</b>\n"
         f"<i>{desc}</i>\n\n"
-        f"<code>{script_content}</code>"
+        f"<b>Файл скрипта:</b>"
     )
     await callback.message.answer(text)
+    await callback.message.answer_document(file_id, caption=f"[{script_name}]")
 
 async def main():
     await dp.start_polling(bot)
