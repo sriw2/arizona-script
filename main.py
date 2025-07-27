@@ -82,7 +82,7 @@ async def start(message: types.Message, state: FSMContext):
     await message.answer("https://t.me/cleodis")
     await state.clear()
 
-@dp.message(F.text == "📜 Скрипты")
+@dp.message(F.text.contains("Скрипты"))
 async def list_categories(message: types.Message):
     data = load_data()
     if not data['categories']:
