@@ -1,0 +1,8 @@
+app:
+  name: telegram-bot
+  run: python3 main.py
+  env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+  # Если нужен pip install:
+  prestart: pip install -r requirements.txt
